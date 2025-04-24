@@ -5,5 +5,13 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
+  optimizeDeps: {
+    include: [
+      'primevue/datatable',
+      'primevue/column', 
+      'primevue/rating',
+      'primevue/button'
+    ]
+  },
   base: '/',
 })
