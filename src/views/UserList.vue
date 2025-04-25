@@ -7,11 +7,25 @@
       <Button label="Logout" icon="pi pi-sign-out" @click="logout" class="p-button-rounded p-button-text" />
     </div>
 
+    <!-- Add Search Input -->
+    <div class="search-bar">
+      <InputText
+        v-model="globalFilter"
+        placeholder="Search by username, email, or role"
+        @input="onGlobalFilter"
+        class="p-inputtext-lg"
+      />
+    </div>
+
     <DataTable
       :value="users"
+      :lazy="true"
       :paginator="true"
-      :rows="10"
+      :rows="rowsPerPage"
+      :totalRecords="totalRecords"
       :loading="loading"
+      @page="onPage($event)"
+      @sort="onSort($event)"
       paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
       :rowsPerPageOptions="[5, 10, 25]"
       currentPageReportTemplate="Showing {first} to {last} of {totalRecords} users"
@@ -41,6 +55,7 @@
       </Column>
     </DataTable>
 
+    <!-- Dialog and other components remain unchanged -->
     <Dialog
       v-model:visible="displayDialog"
       header="Edit User"
@@ -115,12 +130,24 @@ export default {
       { label: 'Admin', value: 'admin' },
       { label: 'User', value: 'user' },
     ]);
+    const totalRecords = ref(0);
+    const rowsPerPage = ref(5);
+    const currentPage = ref(1);
+    const sortField = ref(null);
+    const sortOrder = ref(null); // 1 for ascending, -1 for descending
+    const globalFilter = ref(''); // Search input
     const confirm = useConfirm();
     const toast = useToast();
     const authStore = useAuthStore();
     const router = useRouter();
 
-    const fetchUsers = async () => {
+    const fetchUsers = async (
+      page = 1,
+      rows = rowsPerPage.value,
+      sortFieldParam = sortField.value,
+      sortOrderParam = sortOrder.value,
+      filter = globalFilter.value
+    ) => {
       loading.value = true;
       try {
         const response = await fetch('http://localhost:8080/streetphotography/api/admin/userlist', {
@@ -129,20 +156,46 @@ export default {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
           },
-          credentials: 'include', // Send cookies
+          credentials: 'include',
+          body: JSON.stringify({
+            page: page,
+            size: rows,
+            sortField: sortFieldParam,
+            sortOrder: sortOrderParam === 1 ? 'ASC' : sortOrderParam === -1 ? 'DESC' : null,
+            filter: filter || null,
+          }),
         });
 
         if (!response.ok) {
           throw new Error('Network response was not ok');
         }
 
-        users.value = await response.json();
+        const data = await response.json();
+        users.value = data.users;
+        totalRecords.value = data.totalRecords;
+        currentPage.value = page;
       } catch (error) {
         console.error('Error fetching users:', error);
         toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch users', life: 3000 });
       } finally {
         loading.value = false;
       }
+    };
+
+    const onPage = (event) => {
+      rowsPerPage.value = event.rows;
+      const page = event.page + 1; // PrimeVue page is 0-based, backend expects 1-based
+      fetchUsers(page, event.rows);
+    };
+
+    const onSort = (event) => {
+      sortField.value = event.sortField;
+      sortOrder.value = event.sortOrder;
+      fetchUsers(currentPage.value, rowsPerPage.value);
+    };
+
+    const onGlobalFilter = () => {
+      fetchUsers(currentPage.value, rowsPerPage.value);
     };
 
     const editUser = (user) => {
@@ -159,7 +212,7 @@ export default {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
           },
-          credentials: 'include', // Send cookies
+          credentials: 'include',
           body: JSON.stringify(selectedUser.value),
         });
 
@@ -168,7 +221,7 @@ export default {
         }
 
         displayDialog.value = false;
-        fetchUsers();
+        fetchUsers(currentPage.value, rowsPerPage.value);
         toast.add({ severity: 'success', summary: 'Success', detail: 'User updated successfully', life: 3000 });
       } catch (error) {
         console.error('Error updating user:', error);
@@ -200,7 +253,7 @@ export default {
             headers: {
               'Accept': 'application/json',
             },
-            credentials: 'include', // Send cookies
+            credentials: 'include',
           }
         );
 
@@ -208,7 +261,7 @@ export default {
           throw new Error('Network response was not ok');
         }
 
-        fetchUsers();
+        fetchUsers(currentPage.value, rowsPerPage.value);
         toast.add({ severity: 'success', summary: 'Success', detail: 'User deleted successfully', life: 3000 });
       } catch (error) {
         console.error('Error deleting user:', error);
@@ -233,7 +286,13 @@ export default {
       displayDialog,
       selectedUser,
       roles,
+      totalRecords,
+      rowsPerPage,
+      globalFilter,
       fetchUsers,
+      onPage,
+      onSort,
+      onGlobalFilter,
       editUser,
       updateUser,
       confirmDeleteUser,
@@ -264,5 +323,14 @@ h1 {
   display: flex;
   gap: 1rem;
   margin-bottom: 1.5rem;
+}
+
+.search-bar {
+  margin-bottom: 1.5rem;
+}
+
+.search-bar input {
+  width: 100%;
+  max-width: 400px;
 }
 </style>
