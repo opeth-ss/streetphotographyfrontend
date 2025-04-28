@@ -7,14 +7,20 @@
       <Button label="Logout" icon="pi pi-sign-out" @click="logout" class="p-button-rounded p-button-text" />
     </div>
 
-    <!-- Add Search Input -->
+    <!-- Global Search Input -->
     <div class="search-bar">
-      <InputText
-        v-model="globalFilter"
-        placeholder="Search by username, email, or role"
-        @input="onGlobalFilter"
-        class="p-inputtext-lg"
-      />
+      <IconField>
+        <InputIcon>
+          <i class="pi pi-search" />
+        </InputIcon>
+        <InputText
+          v-model="filters.global.value"
+          placeholder="Search by username, email, or role"
+          class="p-inputtext-lg"
+          @keyup.enter="onFilter"
+          @blur="onFilter"
+        />
+      </IconField>
     </div>
 
     <DataTable
@@ -24,16 +30,68 @@
       :rows="rowsPerPage"
       :totalRecords="totalRecords"
       :loading="loading"
+      :filters="filters"
+      dataKey="id"
+      filterDisplay="row"
       @page="onPage($event)"
       @sort="onSort($event)"
       paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
       :rowsPerPageOptions="[5, 10, 25]"
       currentPageReportTemplate="Showing {first} to {last} of {totalRecords} users"
     >
-      <Column field="id" header="ID" :sortable="true"></Column>
-      <Column field="userName" header="Username" :sortable="true"></Column>
-      <Column field="email" header="Email" :sortable="true"></Column>
-      <Column field="role" header="Role" :sortable="true"></Column>
+      <Column field="id" header="ID" :sortable="true">
+        <template #filter="{ filterModel }">
+          <InputText
+            :value="filters.id.value"
+            type="text"
+            @input="updateColumnFilter('id', $event.target.value)"
+            @keyup.enter="onFilter"
+            @blur="onFilter"
+            placeholder="Search by ID"
+            class="p-column-filter"
+          />
+        </template>
+      </Column>
+      <Column field="userName" header="Username" :sortable="true">
+        <template #filter="{ filterModel }">
+          <InputText
+            :value="filters.userName.value"
+            type="text"
+            @input="updateColumnFilter('userName', $event.target.value)"
+            @keyup.enter="onFilter"
+            @blur="onFilter"
+            placeholder="Search by username"
+            class="p-column-filter"
+          />
+        </template>
+      </Column>
+      <Column field="email" header="Email" :sortable="true">
+        <template #filter="{ filterModel }">
+          <InputText
+            :value="filters.email.value"
+            type="text"
+            @input="updateColumnFilter('email', $event.target.value)"
+            @keyup.enter="onFilter"
+            @blur="onFilter"
+            placeholder="Search by email"
+            class="p-column-filter"
+          />
+        </template>
+      </Column>
+      <Column field="role" header="Role" :sortable="true" :showFilterMenu="false">
+        <template #filter="{ filterModel }">
+          <Dropdown
+            :value="filters.role.value"
+            :options="roles"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Select a Role"
+            class="p-column-filter"
+            :showClear="true"
+            @change="updateColumnFilter('role', $event.value); onFilter()"
+          />
+        </template>
+      </Column>
       <Column field="averageRating" header="Rating" :sortable="true">
         <template #body="{ data }">
           <Rating :modelValue="data.averageRating" readonly :cancel="false" />
@@ -55,7 +113,6 @@
       </Column>
     </DataTable>
 
-    <!-- Dialog and other components remain unchanged -->
     <Dialog
       v-model:visible="displayDialog"
       header="Edit User"
@@ -96,6 +153,7 @@
 <script>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { FilterMatchMode } from '@primevue/core/api';
 import Button from 'primevue/button';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -103,6 +161,8 @@ import Rating from 'primevue/rating';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
 import Dropdown from 'primevue/dropdown';
+import IconField from 'primevue/iconfield';
+import InputIcon from 'primevue/inputicon';
 import ConfirmDialog from 'primevue/confirmdialog';
 import Toast from 'primevue/toast';
 import { useConfirm } from 'primevue/useconfirm';
@@ -118,6 +178,8 @@ export default {
     Dialog,
     InputText,
     Dropdown,
+    IconField,
+    InputIcon,
     ConfirmDialog,
     Toast,
   },
@@ -134,22 +196,40 @@ export default {
     const rowsPerPage = ref(5);
     const currentPage = ref(1);
     const sortField = ref(null);
-    const sortOrder = ref(null); // 1 for ascending, -1 for descending
-    const globalFilter = ref(''); // Search input
+    const sortOrder = ref(null);
     const confirm = useConfirm();
     const toast = useToast();
     const authStore = useAuthStore();
     const router = useRouter();
 
+    const filters = ref({
+      global: { value: null, matchMode: FilterMatchMode.CONTAINS },
+      id: { value: null, matchMode: FilterMatchMode.EQUALS },
+      userName: { value: null, matchMode: FilterMatchMode.CONTAINS },
+      email: { value: null, matchMode: FilterMatchMode.CONTAINS },
+      role: { value: null, matchMode: FilterMatchMode.EQUALS },
+    });
+
+    const updateColumnFilter = (field, value) => {
+      filters.value[field].value = value;
+    };
+
     const fetchUsers = async (
       page = 1,
       rows = rowsPerPage.value,
       sortFieldParam = sortField.value,
-      sortOrderParam = sortOrder.value,
-      filter = globalFilter.value
+      sortOrderParam = sortOrder.value
     ) => {
       loading.value = true;
       try {
+        const columnFilters = {
+          id: filters.value.id.value || null,
+          userName: filters.value.userName.value || null,
+          email: filters.value.email.value || null,
+          role: filters.value.role.value || null,
+          global: filters.value.global.value || null,
+        };
+
         const response = await fetch('http://localhost:8080/streetphotography/api/admin/userlist', {
           method: 'POST',
           headers: {
@@ -162,12 +242,12 @@ export default {
             size: rows,
             sortField: sortFieldParam,
             sortOrder: sortOrderParam === 1 ? 'ASC' : sortOrderParam === -1 ? 'DESC' : null,
-            filter: filter || null,
+            filters: columnFilters,
           }),
         });
 
         if (!response.ok) {
-          throw new Error('Network response was not ok');
+          throw new Error(`Network response was not ok: ${response.status}`);
         }
 
         const data = await response.json();
@@ -175,7 +255,6 @@ export default {
         totalRecords.value = data.totalRecords;
         currentPage.value = page;
       } catch (error) {
-        console.error('Error fetching users:', error);
         toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch users', life: 3000 });
       } finally {
         loading.value = false;
@@ -184,18 +263,19 @@ export default {
 
     const onPage = (event) => {
       rowsPerPage.value = event.rows;
-      const page = event.page + 1; // PrimeVue page is 0-based, backend expects 1-based
+      const page = event.page + 1;
       fetchUsers(page, event.rows);
     };
 
     const onSort = (event) => {
       sortField.value = event.sortField;
       sortOrder.value = event.sortOrder;
-      fetchUsers(currentPage.value, rowsPerPage.value);
+      fetchUsers(1, rowsPerPage.value, event.sortField, event.sortOrder);
     };
 
-    const onGlobalFilter = () => {
-      fetchUsers(currentPage.value, rowsPerPage.value);
+    const onFilter = () => {
+      currentPage.value = 1;
+      fetchUsers(1, rowsPerPage.value, sortField.value, sortOrder.value);
     };
 
     const editUser = (user) => {
@@ -224,7 +304,6 @@ export default {
         fetchUsers(currentPage.value, rowsPerPage.value);
         toast.add({ severity: 'success', summary: 'Success', detail: 'User updated successfully', life: 3000 });
       } catch (error) {
-        console.error('Error updating user:', error);
         toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to update user', life: 3000 });
       } finally {
         loading.value = false;
@@ -264,7 +343,6 @@ export default {
         fetchUsers(currentPage.value, rowsPerPage.value);
         toast.add({ severity: 'success', summary: 'Success', detail: 'User deleted successfully', life: 3000 });
       } catch (error) {
-        console.error('Error deleting user:', error);
         toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete user', life: 3000 });
       } finally {
         loading.value = false;
@@ -288,11 +366,12 @@ export default {
       roles,
       totalRecords,
       rowsPerPage,
-      globalFilter,
+      filters,
       fetchUsers,
       onPage,
       onSort,
-      onGlobalFilter,
+      onFilter,
+      updateColumnFilter,
       editUser,
       updateUser,
       confirmDeleteUser,
@@ -332,5 +411,9 @@ h1 {
 .search-bar input {
   width: 100%;
   max-width: 400px;
+}
+
+.p-column-filter {
+  width: 100%;
 }
 </style>
