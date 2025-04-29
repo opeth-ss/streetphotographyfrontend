@@ -28,6 +28,12 @@ const routes = [
     component: () => import('../views/Dashboard.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/calculator',
+    name: 'Calculator',
+    component: () => import('../views/Calculator.vue'),
+    meta: { requiresAuth: true },
+  },
 ];
 
 const router = createRouter({

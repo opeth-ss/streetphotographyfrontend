@@ -1,169 +1,310 @@
 <template>
-    <h1>User Page</h1>
-    <Button label="Logout" icon="pi pi-sign-out" @click="logout" class="p-button-rounded p-button-text" />
+  <h1>User Page</h1>
+  <Button label="Logout" icon="pi pi-sign-out" @click="logout" class="p-button-rounded p-button-text" />
+  <AutoComplete 
+    v-model="value" 
+    dropdown 
+    :suggestions="filteredItems" 
+    @complete="search" 
+    field="tagName" />
+  <Button label="Create Post" @click="openDialog" />
+
+  <Dialog
+    v-model:visible="displayDialog"
+    header="Create"
+    :modal="true"
+    class="p-fluid"
+    style="width: 450px"
+  >
+    <div class="p-field">
+      <label for="Description">Description</label>
+      <InputText 
+        id="Description" 
+        v-model="form.description" 
+        :class="{ 'p-invalid': errors.description }" 
+      />
+      <small v-if="errors.description" class="p-error">{{ errors.description }}</small>
+    </div>
+
+    <div v-if="isDescriptionValid" class="p-field">
+      <label for="location">Location</label>
+      <InputText 
+        id="location" 
+        v-model="form.location" 
+        :class="{ 'p-invalid': errors.location }" 
+      />
+      <small v-if="errors.location" class="p-error">{{ errors.location }}</small>
+    </div>
+
+    <div v-if="isLocationValid" class="p-field">
+      <label for="tags">Tags</label>
+      <AutoComplete 
+        id="tags"
+        v-model="form.tags" 
+        dropdown 
+        multiple
+        :suggestions="filteredItems" 
+        @complete="search" 
+        field="tagName"
+        :class="{ 'p-invalid': errors.tags }"
+      />
+      <small v-if="errors.tags" class="p-error">{{ errors.tags }}</small>
+    </div>
+
+    <div v-if="isTagsValid" class="p-field">
+      <label for="upload">Upload Picture</label>
+      <FileUpload 
+        id="upload"
+        mode="basic"
+        name="demo[]"
+        :auto="true"
+        chooseLabel="Browse"
+        @select="onSelectFile"
+        @upload="onUpload"
+        :class="{ 'p-invalid': errors.file }"
+      />
+      <small v-if="errors.file" class="p-error">{{ errors.file }}</small>
+    </div>
+
+    <template #footer>
+      <Button label="Cancel" icon="pi pi-times" @click="displayDialog = false" class="p-button-text" />
+      <Button 
+        label="Save" 
+        icon="pi pi-check" 
+        @click="savePost" 
+        :loading="loading" 
+        :disabled="!isFormValid"
+      />
+    </template>
+  </Dialog>
 </template>
 
 <script>
-import { ref, onMounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import Button from 'primevue/button';
-import DataTable from 'primevue/datatable';
-import Column from 'primevue/column';
-import Rating from 'primevue/rating';
+import AutoComplete from 'primevue/autocomplete';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
-import Dropdown from 'primevue/dropdown';
-import ConfirmDialog from 'primevue/confirmdialog';
-import Toast from 'primevue/toast';
-import { useConfirm } from 'primevue/useconfirm';
-import { useToast } from 'primevue/usetoast';
+import FileUpload from 'primevue/fileupload';
 import { useAuthStore } from '../stores/auth';
 
 export default {
   components: {
     Button,
-    DataTable,
-    Column,
-    Rating,
+    AutoComplete,
     Dialog,
     InputText,
-    Dropdown,
-    ConfirmDialog,
-    Toast,
+    FileUpload
   },
   setup() {
-    const users = ref([]);
-    const loading = ref(false);
-    const displayDialog = ref(false);
-    const selectedUser = ref({});
-    const roles = ref([
-      { label: 'Admin', value: 'admin' },
-      { label: 'User', value: 'user' },
-    ]);
-    const confirm = useConfirm();
-    const toast = useToast();
     const authStore = useAuthStore();
     const router = useRouter();
 
-    const fetchUsers = async () => {
-      loading.value = true;
-      try {
-        const response = await fetch('http://localhost:8080/streetphotography/api/admin/userlist', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          credentials: 'include', // Send cookies
-        });
+    const value = ref('');
+    const items = ref([]);
+    const displayDialog = ref(false);
+    const loading = ref(false);
 
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
+    // Form data
+    const form = ref({
+      description: '',
+      location: '',
+      tags: [],
+      file: null
+    });
 
-        users.value = await response.json();
-      } catch (error) {
-        console.error('Error fetching users:', error);
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to fetch users', life: 3000 });
-      } finally {
-        loading.value = false;
+    // Error messages
+    const errors = ref({
+      description: '',
+      location: '',
+      tags: '',
+      file: ''
+    });
+
+    // Validation states
+    const isDescriptionValid = computed(() => {
+      return form.value.description.length >= 10;
+    });
+
+    const isLocationValid = computed(() => {
+      return isDescriptionValid.value && form.value.location.length >= 3;
+    });
+
+    const isTagsValid = computed(() => {
+      return isLocationValid.value && form.value.tags.length > 0;
+    });
+
+    const isFormValid = computed(() => {
+      return isDescriptionValid.value && 
+             isLocationValid.value && 
+             isTagsValid.value && 
+             form.value.file !== null;
+    });
+
+    // Watch form fields for real-time validation
+    watch(() => form.value.description, (newValue) => {
+      if (newValue.length < 10) {
+        errors.value.description = 'Description must be at least 10 characters long';
+      } else {
+        errors.value.description = '';
       }
-    };
+    });
 
-    const editUser = (user) => {
-      selectedUser.value = { ...user };
-      displayDialog.value = true;
-    };
-
-    const updateUser = async () => {
-      loading.value = true;
-      try {
-        const response = await fetch('http://localhost:8080/streetphotography/api/admin/updateUser', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          credentials: 'include', // Send cookies
-          body: JSON.stringify(selectedUser.value),
-        });
-
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-
-        displayDialog.value = false;
-        fetchUsers();
-        toast.add({ severity: 'success', summary: 'Success', detail: 'User updated successfully', life: 3000 });
-      } catch (error) {
-        console.error('Error updating user:', error);
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to update user', life: 3000 });
-      } finally {
-        loading.value = false;
+    watch(() => form.value.location, (newValue) => {
+      if (newValue.length < 3) {
+        errors.value.location = 'Location must be at least 3 characters long';
+      } else {
+        errors.value.location = '';
       }
-    };
+    });
 
-    const confirmDeleteUser = (user) => {
-      confirm.require({
-        message: `Are you sure you want to delete ${user.userName}?`,
-        header: 'Confirm Deletion',
-        icon: 'pi pi-exclamation-triangle',
-        accept: () => deleteUser(user.id),
-        reject: () => {
-          toast.add({ severity: 'info', summary: 'Cancelled', detail: 'Deletion cancelled', life: 3000 });
-        },
-      });
-    };
-
-    const deleteUser = async (userId) => {
-      loading.value = true;
-      try {
-        const response = await fetch(
-          `http://localhost:8080/streetphotography/api/admin/deleteUser/${userId}`,
-          {
-            method: 'DELETE',
-            headers: {
-              'Accept': 'application/json',
-            },
-            credentials: 'include', // Send cookies
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-
-        fetchUsers();
-        toast.add({ severity: 'success', summary: 'Success', detail: 'User deleted successfully', life: 3000 });
-      } catch (error) {
-        console.error('Error deleting user:', error);
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to delete user', life: 3000 });
-      } finally {
-        loading.value = false;
+    watch(() => form.value.tags, (newValue) => {
+      if (newValue.length === 0) {
+        errors.value.tags = 'At least one tag is required';
+      } else {
+        errors.value.tags = '';
       }
-    };
+    });
+
+    const filteredItems = computed(() => {
+      return items.value.map(item => item.tagName);
+    });
 
     const logout = async () => {
       await authStore.logout();
       router.push('/login');
     };
 
-    onMounted(() => {
-      fetchUsers();
-    });
+    const search = async (event) => {
+      try {
+        const response = await fetch('http://localhost:8080/streetphotography/api/user/tags', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            query: event.query,
+            limit: event.query ? null : 10
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+
+        const data = await response.json();
+        items.value = data;
+      } catch (error) {
+        console.error('Failed to fetch tags:', error);
+      }
+    };
+
+    const openDialog = () => {
+      // Reset form when opening dialog
+      form.value = {
+        description: '',
+        location: '',
+        tags: [],
+        file: null
+      };
+      errors.value = {
+        description: '',
+        location: '',
+        tags: '',
+        file: ''
+      };
+      displayDialog.value = true;
+    };
+
+    const onSelectFile = (event) => {
+      form.value.file = event.files[0];
+      errors.value.file = form.value.file ? '' : 'Please select an image';
+    };
+
+    const onUpload = () => {
+      // Handle file upload logic here
+      errors.value.file = form.value.file ? '' : 'Please select an image';
+    };
+
+    const savePost = () => {
+      if (!isFormValid.value) return;
+
+      loading.value = true;
+      // Simulate async save
+      setTimeout(() => {
+        loading.value = false;
+        displayDialog.value = false;
+        // Reset form after save
+        form.value = {
+          description: '',
+          location: '',
+          tags: [],
+          file: null
+        };
+      }, 1000);
+    };
 
     return {
-      users,
-      loading,
-      displayDialog,
-      selectedUser,
-      roles,
-      fetchUsers,
-      editUser,
-      updateUser,
-      confirmDeleteUser,
+      value,
+      filteredItems,
       logout,
+      search,
+      displayDialog,
+      loading,
+      openDialog,
+      onSelectFile,
+      onUpload,
+      savePost,
+      form,
+      errors,
+      isDescriptionValid,
+      isLocationValid,
+      isTagsValid,
+      isFormValid
     };
-  },
+  }
 };
 </script>
+
+<style scoped>
+.card {
+  padding: 2rem;
+}
+
+h1 {
+  margin-bottom: 1.5rem;
+}
+
+.p-field {
+  margin-bottom: 1.5rem;
+}
+
+.p-mr-2 {
+  margin-right: 0.5rem;
+}
+
+.button-group {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.search-bar {
+  margin-bottom: 1.5rem;
+}
+
+.search-bar input {
+  width: 100%;
+  max-width: 400px;
+}
+
+.p-column-filter {
+  width: 100%;
+}
+
+.p-error {
+  color: #ff4d4f;
+  font-size: 0.875rem;
+}
+</style>
