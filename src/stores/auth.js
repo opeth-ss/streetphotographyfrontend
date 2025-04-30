@@ -9,6 +9,7 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     getUser: (state) => state.user,
+    role: (state) => state.user?.role || null,
   },
   actions: {
     // Initialize from localStorage

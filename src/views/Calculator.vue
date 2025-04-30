@@ -64,6 +64,7 @@
   import InputNumber from 'primevue/inputnumber'
   import Button from 'primevue/button'
   import Card from 'primevue/card'
+  import { onMounted, onUnmounted } from 'vue'
   
   export default {
     components: {
@@ -142,6 +143,60 @@
           maximumFractionDigits: 2,
         }).format(value)
       }
+
+      onMounted(() => {
+    document.addEventListener('contextmenu', disableRightClick)
+    document.addEventListener('keydown', disableKeyCombos)
+    window.addEventListener('keydown', blockDeveloperShortcuts)
+})
+onUnmounted(() => {
+    document.removeEventListener('contextmenu', disableRightClick)
+    document.removeEventListener('keydown', disableKeyCombos)
+    window.removeEventListener('keydown', blockDeveloperShortcuts)
+})
+function disableRightClick(event: MouseEvent) {
+    event.preventDefault()
+}
+function disableKeyCombos(event: KeyboardEvent) {
+    // Disabling F12, Ctrl+Shift+I/C/J, and Ctrl+U
+    if (
+        event.key === 'F12' ||
+        (event.ctrlKey && event.shiftKey && ['I', 'C', 'J'].includes(event.key)) ||
+        (event.ctrlKey && event.key === 'U')
+    ) {
+        event.preventDefault()
+    }
+}
+// Blocking Developer Tools Key Shortcuts more effectively
+function blockDeveloperShortcuts(event: KeyboardEvent) {
+    if (
+        (event.ctrlKey && event.key === 'I') || // Ctrl + I
+        (event.ctrlKey && event.key === 'U') || // Ctrl + U
+        (event.ctrlKey && event.shiftKey && event.key === 'J') || // Ctrl + Shift + J
+        (event.ctrlKey && event.shiftKey && event.key === 'C') || // Ctrl + Shift + C
+        event.key === 'F12' // F12
+    ) {
+      event.preventDefault()
+    }
+}
+
+(function detectDevTools() {
+    let threshold = 160;
+    setInterval(() => {
+        const start = performance.now();
+        debugger;
+        const timeTaken = performance.now() - start;
+        if (timeTaken > threshold) {
+            // Detected DevTools — try to close or redirect
+            document.body.innerHTML = ''; // Clear content
+            alert("DevTools detected. The page will close.");
+            // Attempt to close (only works if page was opened via script)
+            window.close();
+            // Fallback: redirect to blank page
+            location.href = "about:blank";
+        }
+    }, 1000);
+})();
   
       return {
         firstNumber,

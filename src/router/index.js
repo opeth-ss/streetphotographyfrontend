@@ -1,16 +1,37 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import DefaultLayout from '../layouts/DefaultLayout.vue';
 
 const Login = () => import('../views/Login.vue');
 const Register = () => import('../views/Register.vue');
 const UserList = () => import('../views/UserList.vue');
+const Dashboard = () => import('../views/Dashboard.vue');
+const Calculator = () => import('../views/Calculator.vue');
 
 const routes = [
   {
     path: '/',
-    name: 'Home',
-    component: UserList,
-    meta: { requiresAuth: true, requiresAdmin: true },
+    component: DefaultLayout,
+    children: [
+      {
+        path: '',
+        name: 'Home',
+        component: UserList,
+        meta: { requiresAuth: true, requiresAdmin: true },
+      },
+      {
+        path: '/dashboard',
+        name: 'Dashboard',
+        component: Dashboard,
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/calculator',
+        name: 'Calculator',
+        component: Calculator,
+        meta: { requiresAuth: true },
+      },
+    ],
   },
   {
     path: '/login',
@@ -21,18 +42,6 @@ const routes = [
     path: '/register',
     name: 'Register',
     component: Register,
-  },
-  {
-    path: '/dashboard',
-    name: 'Dashboard',
-    component: () => import('../views/Dashboard.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/calculator',
-    name: 'Calculator',
-    component: () => import('../views/Calculator.vue'),
-    meta: { requiresAuth: true },
   },
 ];
 
