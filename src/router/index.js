@@ -7,6 +7,8 @@ const Register = () => import('../views/Register.vue');
 const UserList = () => import('../views/UserList.vue');
 const Dashboard = () => import('../views/Dashboard.vue');
 const Calculator = () => import('../views/Calculator.vue');
+const Class = () => import('../views/TypeClass.vue');
+
 
 const routes = [
   {
@@ -31,17 +33,25 @@ const routes = [
         component: Calculator,
         meta: { requiresAuth: true },
       },
+      {
+        path: '/class',
+        name: 'Class',
+        component: Class,
+        meta: { requiresAuth: true },
+      },
     ],
   },
   {
     path: '/login',
     name: 'Login',
     component: Login,
+    meta: { requiresGuest: true },
   },
   {
     path: '/register',
     name: 'Register',
     component: Register,
+    meta: { requiresGuest: true },
   },
 ];
 
@@ -58,31 +68,23 @@ router.beforeEach(async (to, from, next) => {
     await authStore.initializeAuth();
   }
 
+  // Handle guest-only routes (login/register)
+  if (to.meta.requiresGuest && authStore.isAuthenticated) {
+    return next(authStore.role === 'admin' ? '/' : '/dashboard');
+  }
+
   // Handle protected routes
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    next('/login');
+    return next('/login');
   }
-  // Redirect authenticated users from /login to appropriate page
-  else if (to.path === '/login' && authStore.isAuthenticated) {
-    if (authStore.getUser?.role === 'admin') {
-      next('/');
-    } else {
-      next('/dashboard');
-    }
+
+  // Handle admin-only routes
+  if (to.meta.requiresAdmin && authStore.role !== 'admin') {
+    return next('/dashboard');
   }
-  // Redirect unauthenticated users from / to /login
-  else if (to.path === '/' && !authStore.isAuthenticated) {
-    next('/login');
-  }
-  // Allow other routes
-  else {
-    // Ensure admin-only routes are protected
-    if (to.meta.requiresAdmin && authStore.getUser?.role !== 'admin') {
-      next('/dashboard');
-    } else {
-      next();
-    }
-  }
+
+  // Allow access in all other cases
+  next();
 });
 
 export default router;

@@ -9,6 +9,7 @@ export default defineConfig({
     coverage: {
       reporter: ['text', 'html', 'json'],
       reportsDirectory: './coverage',
+      exclude:["src/main.js", "vite.config.js", "vitest.config.ts"],
     },
   },
 })

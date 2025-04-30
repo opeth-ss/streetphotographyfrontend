@@ -1,10 +1,13 @@
 <template>
   <nav class="navbar">
-    <h1>My App</h1>
+    <img
+      class="navbar-logo"
+      src="/home/opeth-ss/Downloads/LY/ly-logo-zip-file/png/logo-grayscale-inverted.png"
+      alt="LY logo"
+    />
     <div class="nav-links">
-      <p>Role: {{ role || 'none' }}</p>
-      <user-links v-if="role === 'user'" @logout="logout" />
-      <admin-links v-if="role === 'admin'" @logout="logout" />
+      <user-links v-if="authStore.role === 'user'" @logout="logout" />
+      <admin-links v-if="authStore.role === 'admin'" @logout="logout" />
     </div>
   </nav>
 </template>
@@ -22,8 +25,6 @@ const logout = async () => {
   await authStore.logout();
   router.push('/login');
 };
-
-const role = authStore.role;
 </script>
 
 <style scoped>
@@ -67,6 +68,13 @@ const role = authStore.role;
 .nav-links p:hover {
   opacity: 1;
 }
+
+.navbar-logo {
+  height: 100%;
+  max-height: 3rem; /* prevents it from becoming too tall on larger screens */
+  object-fit: contain; /* preserves aspect ratio without cropping */
+}
+
 
 @media (max-width: 768px) {
   .navbar {
