@@ -4,6 +4,13 @@
 
     <div class="button-group">
       <Button label="Refresh" icon="pi pi-refresh" @click="fetchUsers" class="p-button-rounded p-button-text" />
+      <Button
+  label="Download PDF"
+  icon="pi pi-file-pdf"
+  @click="downloadPdf"
+  class="p-button-rounded p-button-text p-button-danger"
+/>
+
       <Button label="Logout" icon="pi pi-sign-out" @click="logout" class="p-button-rounded p-button-text" />
     </div>
 
@@ -168,6 +175,8 @@ import Toast from 'primevue/toast';
 import { useConfirm } from 'primevue/useconfirm';
 import { useToast } from 'primevue/usetoast';
 import { useAuthStore } from '../stores/auth';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default {
   components: {
@@ -349,6 +358,41 @@ export default {
       }
     };
 
+    const downloadPdf = () => {
+  const doc = new jsPDF();
+  
+  // Define columns with the same structure as the example
+  const columns = [
+    { header: 'ID', dataKey: 'id' },
+    { header: 'Username', dataKey: 'userName' },
+    { header: 'Email', dataKey: 'email' },
+    { header: 'Role', dataKey: 'role' },
+    { header: 'Rating', dataKey: 'averageRating' }
+  ];
+
+  // Map the user data to rows
+  const rows = users.value.map(user => ({
+    id: user.id,
+    userName: user.userName,
+    email: user.email,
+    role: user.role,
+    averageRating: user.averageRating
+  }));
+
+  // Generate table using autoTable with similar styling
+  autoTable(doc,{
+    startY: 20,
+    columns: columns,
+    body: rows,
+    styles: { fontSize: 10 },
+    headStyles: { fillColor: [41, 128, 185] }, // Same blue header as example
+    theme: 'grid'
+  });
+
+  // Save the PDF
+  doc.save('user-list.pdf');
+};
+
     const logout = async () => {
       await authStore.logout();
       router.push('/login');
@@ -375,6 +419,7 @@ export default {
       editUser,
       updateUser,
       confirmDeleteUser,
+      downloadPdf,
       logout,
     };
   },
