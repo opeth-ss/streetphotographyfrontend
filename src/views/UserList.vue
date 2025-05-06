@@ -42,7 +42,7 @@
       @page="onPage($event)"
       @sort="onSort($event)"
       paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
-      :rowsPerPageOptions="[5, 10, 25]"
+      :rowsPerPageOptions="[5, 10, 25, 50]"
       currentPageReportTemplate="Showing {first} to {last} of {totalRecords} users"
     >
       <Column field="id" header="ID" :sortable="true">
@@ -168,10 +168,26 @@
         <InputText id="pdfSubtitle" v-model="pdfFormat.subtitle" placeholder="e.g., Generated for Organization XYZ" />
       </div>
       <div class="p-field">
-        <label>Columns to Include</label>
-        <div v-for="col in availableColumns" :key="col.dataKey" class="p-field-checkbox">
-          <Checkbox v-model="pdfFormat.columns" :value="col" />
-          <label>{{ col.header }}</label>
+        <label>Columns to Include (Drag to reorder)</label>
+        <div class="column-list">
+          <div
+            v-for="(column, index) in columnOrder"
+            :key="index"
+            class="column-item"
+            draggable="true"
+            @dragstart="onDragStart($event, index)"
+            @dragover.prevent
+            @drop="onDrop($event, index)"
+          >
+            <span class="drag-handle"><i class="pi pi-grip-vertical"></i></span>
+            <Checkbox
+              :inputId="column.dataKey"
+              :value="column"
+              v-model="selectedColumns"
+              @change="updateColumns"
+            />
+            <label :for="column.dataKey" class="p-ml-2">{{ column.header }}</label>
+          </div>
         </div>
       </div>
       <div class="p-field">
@@ -209,6 +225,105 @@
         <Checkbox v-model="pdfFormat.footer.show" inputId="showFooter" class="p-mt-2" />
         <label for="showFooter" class="p-ml-2">Show Footer</label>
       </div>
+      <!-- Custom Fields Section -->
+      <div class="p-field">
+        <label>Custom Fields</label>
+        <Button
+          label="Add Custom Field"
+          icon="pi pi-plus"
+          @click="addCustomField"
+          class="p-button-text p-button-sm p-mb-2"
+        />
+        <div class="custom-fields-list">
+          <div
+            v-for="(field, index) in pdfFormat.customFields"
+            :key="index"
+            class="custom-field-item"
+          >
+            <div class="p-grid">
+              <div class="p-col-12 p-md-3">
+                <label :for="'fieldLabel' + index">Label</label>
+                <InputText
+                  :id="'fieldLabel' + index"
+                  v-model="field.label"
+                  placeholder="e.g., Report ID"
+                  @input="updateCustomField(index, 'label', $event.target.value)"
+                />
+              </div>
+              <div class="p-col-12 p-md-3">
+                <label :for="'fieldValue' + index">Value</label>
+                <InputText
+                  :id="'fieldValue' + index"
+                  v-model="field.value"
+                  placeholder="e.g., 12345"
+                  @input="updateCustomField(index, 'value', $event.target.value)"
+                />
+              </div>
+              <div class="p-col-12 p-md-2">
+                <label :for="'fieldX' + index">X Position</label>
+                <InputText
+                  :id="'fieldX' + index"
+                  v-model.number="field.position.x"
+                  type="number"
+                  placeholder="e.g., 10"
+                  @input="updateCustomField(index, 'position.x', $event.target.value)"
+                />
+              </div>
+              <div class="p-col-12 p-md-2">
+                <label :for="'fieldY' + index">Y Position</label>
+                <InputText
+                  :id="'fieldY' + index"
+                  v-model.number="field.position.y"
+                  type="number"
+                  placeholder="e.g., 20"
+                  @input="updateCustomField(index, 'position.y', $event.target.value)"
+                />
+              </div>
+              <div class="p-col-12 p-md-2">
+                <label :for="'fieldFont' + index">Font</label>
+                <Dropdown
+                  :id="'fieldFont' + index"
+                  v-model="field.font"
+                  :options="fontOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="Select Font"
+                  @change="updateCustomField(index, 'font', $event.value)"
+                />
+              </div>
+              <div class="p-col-12 p-md-2">
+                <label :for="'fieldFontSize' + index">Font Size</label>
+                <InputText
+                  :id="'fieldFontSize' + index"
+                  v-model.number="field.fontSize"
+                  type="number"
+                  placeholder="e.g., 12"
+                  @input="updateCustomField(index, 'fontSize', $event.target.value)"
+                />
+              </div>
+              <div class="p-col-12 p-md-2">
+                <label :for="'fieldAlign' + index">Alignment</label>
+                <Dropdown
+                  :id="'fieldAlign' + index"
+                  v-model="field.align"
+                  :options="alignOptions"
+                  optionLabel="label"
+                  optionValue="value"
+                  placeholder="Select Alignment"
+                  @change="updateCustomField(index, 'align', $event.value)"
+                />
+              </div>
+              <div class="p-col-12 p-md-1">
+                <Button
+                  icon="pi pi-trash"
+                  class="p-button-rounded p-button-danger p-button-sm p-mt-2"
+                  @click="removeCustomField(index)"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       <template #footer>
         <Button label="Cancel" icon="pi pi-times" @click="showFormatDialog = false" class="p-button-text" />
         <Button label="Generate PDF" icon="pi pi-check" @click="generatePdf" :disabled="!isFormValid" />
@@ -219,6 +334,7 @@
     <Toast />
   </div>
 </template>
+
 <script>
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
@@ -301,11 +417,24 @@ export default {
       { label: 'Plain', value: 'plain' },
     ]);
 
+    const fontOptions = ref([
+      { label: 'Helvetica', value: 'helvetica' },
+      { label: 'Times', value: 'times' },
+      { label: 'Courier', value: 'courier' },
+    ]);
+
+    const alignOptions = ref([
+      { label: 'Left', value: 'left' },
+      { label: 'Center', value: 'center' },
+      { label: 'Right', value: 'right' },
+    ]);
+
     const pdfFormat = ref({
       fileName: 'user-list.pdf',
       title: 'User Management Report',
       subtitle: '',
       columns: [...availableColumns.value],
+      customFields: [],
       styles: {
         font: 'helvetica',
         fontSize: 10,
@@ -347,12 +476,50 @@ export default {
       },
     });
 
+    const columnOrder = ref([...availableColumns.value]);
+    const selectedColumns = ref([...availableColumns.value]);
+
     const isFormValid = computed(() => {
-      return pdfFormat.value.title && pdfFormat.value.columns.length > 0;
+      const hasValidTitleAndColumns = pdfFormat.value.title && selectedColumns.value.length > 0;
+      const hasValidCustomFields = pdfFormat.value.customFields.every(field => 
+        field.label && field.value && field.position.x >= 0 && field.position.y >= 0 && field.font && field.fontSize > 0
+      );
+      return hasValidTitleAndColumns && (pdfFormat.value.customFields.length === 0 || hasValidCustomFields);
     });
+
+    const updateColumns = () => {
+      pdfFormat.value.columns = columnOrder.value.filter(col => 
+        selectedColumns.value.some(selected => selected.dataKey === col.dataKey)
+      );
+    };
 
     const updateColumnFilter = (field, value) => {
       filters.value[field].value = value;
+    };
+
+    const addCustomField = () => {
+      pdfFormat.value.customFields.push({
+        label: '',
+        value: '',
+        position: { x: 10, y: 20 },
+        font: 'helvetica',
+        fontSize: 12,
+        align: 'left',
+      });
+    };
+
+    const updateCustomField = (index, property, value) => {
+      if (property.includes('.')) {
+        const [parent, child] = property.split('.');
+        pdfFormat.value.customFields[index][parent][child] = value;
+      } else {
+        pdfFormat.value.customFields[index][property] = value;
+      }
+    };
+
+    const removeCustomField = (index) => {
+      pdfFormat.value.customFields.splice(index, 1);
+      toast.add({ severity: 'info', summary: 'Field Removed', detail: 'Custom field removed', life: 3000 });
     };
 
     const fetchUsers = async (
@@ -491,6 +658,10 @@ export default {
     };
 
     const openFormatDialog = () => {
+      columnOrder.value = [...availableColumns.value];
+      selectedColumns.value = [...availableColumns.value];
+      console.log('columnOrder:', columnOrder.value); // Debug log
+      updateColumns();
       showFormatDialog.value = true;
     };
 
@@ -508,9 +679,35 @@ export default {
       reader.readAsDataURL(file);
     };
 
+    const onDragStart = (event, index) => {
+      event.dataTransfer.setData('text/plain', index);
+      event.currentTarget.classList.add('dragging');
+    };
+
+    const onDrop = (event, dropIndex) => {
+      event.preventDefault();
+      const dragIndex = parseInt(event.dataTransfer.getData('text/plain'), 10);
+      if (dragIndex === dropIndex) return;
+
+      const updatedOrder = [...columnOrder.value];
+      const [draggedItem] = updatedOrder.splice(dragIndex, 1);
+      updatedOrder.splice(dropIndex, 0, draggedItem);
+      columnOrder.value = updatedOrder;
+
+      updateColumns();
+      toast.add({
+        severity: 'info',
+        summary: 'Column Order Updated',
+        detail: 'Columns reordered successfully',
+        life: 3000,
+      });
+
+      document.querySelectorAll('.column-item').forEach((el) => el.classList.remove('dragging'));
+    };
+
     const generatePdf = () => {
       if (!isFormValid.value) {
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Please provide a title and at least one column', life: 3000 });
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Please provide a title, at least one column, and valid custom fields', life: 3000 });
         return;
       }
 
@@ -521,7 +718,6 @@ export default {
     const downloadPdf = (format) => {
       const doc = new jsPDF();
 
-      // Set metadata
       doc.setProperties({
         title: format.metadata.title || format.title,
         author: format.metadata.author,
@@ -529,27 +725,30 @@ export default {
         keywords: format.metadata.keywords,
       });
 
-      // Add header
-      if (format.header.show) {
-        doc.setFontSize(16);
-        doc.setFont(format.styles.font, 'bold');
-        doc.text(format.header.text, format.margin.left, 15);
+      // Header position
+      let headerY = 15;
 
-        if (format.header.logo) {
-          try {
-            doc.addImage(format.header.logo, 'PNG', format.margin.left, 5, format.header.logoWidth, format.header.logoHeight);
-          } catch (error) {
-            toast.add({ severity: 'warn', summary: 'Warning', detail: 'Failed to add logo', life: 3000 });
-          }
+      // Render custom fields on the first page
+      format.customFields.forEach(field => {
+        doc.setFont(field.font, 'normal');
+        doc.setFontSize(field.fontSize);
+        const textWidth = doc.getTextWidth(field.label + ': ' + field.value);
+        let x = field.position.x;
+        if (field.align === 'center') {
+          x = (doc.internal.pageSize.width - textWidth) / 2;
+        } else if (field.align === 'right') {
+          x = doc.internal.pageSize.width - textWidth - format.margin.right;
         }
-      }
+        doc.text(`${field.label}: ${field.value}`, x, field.position.y);
+      });
 
-      // Add title and subtitle
+      // Title and subtitle on first page
       let currentY = format.margin.top - 10;
       doc.setFontSize(14);
       doc.setFont(format.styles.font, 'bold');
       const formattedTitle = format.title.replace('{filter}', filters.value.global.value || 'All');
       doc.text(formattedTitle, format.margin.left, currentY);
+
       if (format.subtitle) {
         currentY += 7;
         doc.setFontSize(12);
@@ -558,13 +757,12 @@ export default {
         doc.text(formattedSubtitle, format.margin.left, currentY);
       }
 
-      // Prepare columns
+      // Prepare table data
       const columns = format.columns.map(col => ({
         header: col.header,
         dataKey: col.dataKey,
       }));
 
-      // Map user data to rows with custom formatting
       const rows = users.value.map(user =>
         format.columns.reduce((row, col) => {
           let value = user[col.dataKey] || '';
@@ -578,7 +776,7 @@ export default {
         }, {})
       );
 
-      // Generate table
+      // Generate table with autoTable
       autoTable(doc, {
         startY: currentY + 10,
         columns: columns,
@@ -592,18 +790,56 @@ export default {
           return styles;
         }, {}),
         didDrawPage: (data) => {
+          // Header on every page
+          if (format.header.show) {
+            doc.setFontSize(16);
+            doc.setFont(format.styles.font, 'bold');
+            if (data.pageNumber > 1) {
+              doc.setPage(data.pageNumber);
+              headerY = 15;
+            }
+            if (format.header.logo) {
+              try {
+                doc.addImage(
+                  format.header.logo,
+                  'PNG',
+                  format.margin.left,
+                  5,
+                  format.header.logoWidth,
+                  format.header.logoHeight
+                );
+                doc.text(
+                  format.header.text,
+                  format.margin.left + format.header.logoWidth + 5,
+                  headerY
+                );
+              } catch (error) {
+                doc.text(format.header.text, format.margin.left, headerY);
+              }
+            } else {
+              doc.text(format.header.text, format.margin.left, headerY);
+            }
+          }
+
+          // Footer on every page
           if (format.footer.show) {
             const formattedFooter = format.footer.text
               .replace('{date}', new Date().toLocaleDateString())
-              .replace('{page}', data.pageNumber);
+              .replace('{page}', data.pageNumber)
+              .replace('{totalPages}', doc.internal.getNumberOfPages());
             doc.setFontSize(format.footer.fontSize);
             doc.setFont(format.styles.font, 'normal');
-            doc.text(formattedFooter, format.margin.left, doc.internal.pageSize.height - format.margin.bottom);
+            doc.text(
+              formattedFooter,
+              format.margin.left,
+              doc.internal.pageSize.height - format.margin.bottom
+            );
           }
         },
+        margin: format.margin,
       });
 
-      // Save the PDF
+      // Save the PDF once
       doc.save(format.fileName);
     };
 
@@ -628,25 +864,36 @@ export default {
       filters,
       availableColumns,
       themeOptions,
+      fontOptions,
+      alignOptions,
       pdfFormat,
       uploadedLogo,
       isFormValid,
+      columnOrder, 
+      selectedColumns,
       fetchUsers,
       onPage,
       onSort,
       onFilter,
       updateColumnFilter,
+      updateColumns,
+      addCustomField,
+      updateCustomField,
+      removeCustomField,
       editUser,
       updateUser,
       confirmDeleteUser,
       openFormatDialog,
       onLogoUpload,
+      onDragStart,
+      onDrop,
       generatePdf,
       logout,
     };
   },
 };
 </script>
+
 <style scoped>
 .card {
   padding: 2rem;
@@ -705,5 +952,61 @@ h1 {
 .p-checkbox {
   display: flex;
   align-items: center;
+}
+
+.column-list {
+  margin-top: 0.5rem;
+}
+
+.column-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  user-select: none;
+}
+
+.column-item.dragging {
+  opacity: 0.5;
+  background-color: #e9ecef;
+}
+
+.drag-handle {
+  cursor: grab;
+  padding-right: 0.5rem;
+}
+
+.column-item:active .drag-handle {
+  cursor: grabbing;
+}
+
+.custom-fields-list {
+  margin-top: 0.5rem;
+}
+
+.custom-field-item {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.custom-field-item .p-grid {
+  align-items: center;
+}
+
+.custom-field-item label {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.custom-field-item .p-inputtext,
+.custom-field-item .p-dropdown {
+  width: 100%;
 }
 </style>

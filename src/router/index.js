@@ -5,6 +5,7 @@ import DefaultLayout from '../layouts/DefaultLayout.vue';
 const Login = () => import('../views/Login.vue');
 const Register = () => import('../views/Register.vue');
 const UserList = () => import('../views/UserList.vue');
+const UserList1 = () => import('../views/UserList1.vue');
 const Dashboard = () => import('../views/Dashboard.vue');
 const Calculator = () => import('../views/Calculator.vue');
 const Class = () => import('../views/TypeClass.vue');
@@ -19,6 +20,12 @@ const routes = [
         path: '',
         name: 'Home',
         component: UserList,
+        meta: { requiresAuth: true, requiresAdmin: true },
+      },
+      {
+        path: '/userlist',
+        name: 'Userlist',
+        component: UserList1,
         meta: { requiresAuth: true, requiresAdmin: true },
       },
       {

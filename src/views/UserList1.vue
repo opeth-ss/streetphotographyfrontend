@@ -1,0 +1,306 @@
+<template>
+    <div class="card">
+      <div class="flex justify-content-end mb-3">
+        <Button label="Print" icon="pi pi-print" @click="generatePDF" />
+      </div>
+      <DataTable
+        :value="users"
+        :lazy="true"
+        :paginator="true"
+        :rows="rowsPerPage"
+        :totalRecords="totalRecords"
+        :loading="loading"
+        dataKey="id"
+        @page="onPage($event)"
+        paginatorTemplate="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink CurrentPageReport RowsPerPageDropdown"
+        :rowsPerPageOptions="[10, 25, 50]"
+        currentPageReportTemplate="Showing {first} to {last} of {totalRecords} users"
+        ref="dt"
+      >
+        <Column field="id" header="ID"></Column>
+        <Column field="userName" header="Username"></Column>
+        <Column field="email" header="Email"></Column>
+        <Column field="role" header="Role"></Column>
+        <Column field="averageRating" header="Rating">
+          <template #body="{ data }">
+            <Rating :modelValue="data.averageRating" readonly :cancel="false" />
+          </template>
+        </Column>
+      </DataTable>
+    </div>
+  </template>
+  
+  <script>
+  import { ref, onMounted } from 'vue';
+  import DataTable from 'primevue/datatable';
+  import Column from 'primevue/column';
+  import Rating from 'primevue/rating';
+  import Button from 'primevue/button';
+  import { jsPDF } from 'jspdf';
+  import autoTable from 'jspdf-autotable';
+  
+  export default {
+    components: {
+      DataTable,
+      Column,
+      Rating,
+      Button
+    },
+    setup() {
+      const users = ref([]);
+      const loading = ref(false);
+      const totalRecords = ref(0);
+      const rowsPerPage = ref(10);
+      const dt = ref();
+      const templateConfig = ref({});
+  
+      const fetchUsers = async (page = 1, rows = rowsPerPage.value) => {
+        loading.value = true;
+        try {
+          const response = await fetch('http://localhost:8080/streetphotography/api/admin/userlist', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              page: page,
+              size: rows
+            }),
+          });
+  
+          if (!response.ok) throw new Error('Network response was not ok');
+          const data = await response.json();
+          users.value = data.users;
+          totalRecords.value = data.totalRecords;
+        } catch (error) {
+          console.error('Failed to fetch users:', error);
+        } finally {
+          loading.value = false;
+        }
+      };
+  
+      const loadTemplateConfig = async () => {
+        try {
+          const response = await fetch('/templates/pdf-template.xml', {
+            headers: {
+              'Accept': 'application/xml'
+            }
+          });
+  
+          if (!response.ok) throw new Error('Network response was not ok');
+          
+          const xmlText = await response.text();
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(xmlText, "application/xml");
+          
+          templateConfig.value = {
+            title: xmlDoc.querySelector('title')?.textContent || 'User List',
+            header: xmlDoc.querySelector('header')?.textContent || '',
+            footer: xmlDoc.querySelector('footer')?.textContent || 'Page {page} of {pages}',
+            columns: Array.from(xmlDoc.querySelectorAll('columns column')).map(col => ({
+              field: col.getAttribute('field'),
+              header: col.getAttribute('header'),
+              align: col.getAttribute('align') || 'left',
+              fontSize: parseInt(col.getAttribute('fontSize')) || 10,
+              visible: col.getAttribute('visible') !== 'false'
+            })),
+            styles: {
+              font: xmlDoc.querySelector('styles font')?.textContent || 'helvetica',
+              titleSize: parseInt(xmlDoc.querySelector('styles titleSize')?.textContent) || 16,
+              headerSize: parseInt(xmlDoc.querySelector('styles headerSize')?.textContent) || 10,
+              cellSize: parseInt(xmlDoc.querySelector('styles cellSize')?.textContent) || 10,
+              margin: {
+                top: parseInt(xmlDoc.querySelector('styles margin top')?.textContent) || 20,
+                left: parseInt(xmlDoc.querySelector('styles margin left')?.textContent) || 10,
+                right: parseInt(xmlDoc.querySelector('styles margin right')?.textContent) || 10,
+                bottom: parseInt(xmlDoc.querySelector('styles margin bottom')?.textContent) || 20
+              }
+            }
+          };
+        } catch (error) {
+          console.error('Error loading template config:', error);
+          templateConfig.value = getDefaultTemplateConfig();
+        }
+      };
+  
+      const getDefaultTemplateConfig = () => {
+        return {
+          title: 'User List',
+          header: 'Generated by Street Photography App',
+          footer: 'Page {page} of {pages}',
+          columns: [
+            { field: 'id', header: 'ID', align: 'left', fontSize: 10, visible: true },
+            { field: 'userName', header: 'Username', align: 'left', fontSize: 10, visible: true },
+            { field: 'email', header: 'Email', align: 'left', fontSize: 10, visible: true },
+            { field: 'role', header: 'Role', align: 'left', fontSize: 10, visible: true },
+            { field: 'averageRating', header: 'Rating', align: 'center', fontSize: 10, visible: true }
+          ],
+          styles: {
+            font: 'helvetica',
+            titleSize: 16,
+            headerSize: 10,
+            cellSize: 10,
+            margin: {
+              top: 20,
+              left: 10,
+              right: 10,
+              bottom: 20
+            }
+          }
+        };
+      };
+  
+      const generatePDF = () => {
+        const doc = new jsPDF();
+  
+        fetch('/templates/pdf-template.xml')
+          .then(response => response.text())
+          .then(xmlText => {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, "application/xml");
+  
+            const title = xmlDoc.querySelector('title')?.textContent || 'User List';
+            const styles = {
+              font: xmlDoc.querySelector('styles font')?.textContent || 'helvetica',
+              titleSize: parseInt(xmlDoc.querySelector('styles titleSize')?.textContent) || 18,
+              headerSize: parseInt(xmlDoc.querySelector('styles headerSize')?.textContent) || 10,
+              cellSize: parseInt(xmlDoc.querySelector('styles cellSize')?.textContent) || 9,
+              margin: {
+                top: parseInt(xmlDoc.querySelector('styles margin top')?.textContent) || 25,
+                left: parseInt(xmlDoc.querySelector('styles margin left')?.textContent) || 15,
+                right: parseInt(xmlDoc.querySelector('styles margin right')?.textContent) || 15,
+                bottom: parseInt(xmlDoc.querySelector('styles margin bottom')?.textContent) || 20,
+              },
+            };
+  
+            const headers = Array.from(xmlDoc.querySelectorAll('header')).map(headerNode => ({
+              text: headerNode.textContent || '',
+              align: headerNode.getAttribute('align') || 'center',
+              fontSize: parseInt(headerNode.getAttribute('fontSize')) || styles.headerSize
+            }));
+  
+            const footers = Array.from(xmlDoc.querySelectorAll('footer')).map(footerNode => ({
+              text: footerNode.textContent || '',
+              align: footerNode.getAttribute('align') || 'center',
+              fontSize: parseInt(footerNode.getAttribute('fontSize')) || styles.headerSize
+            }));
+  
+            const columns = Array.from(xmlDoc.querySelectorAll('columns column'))
+              .filter(col => col.getAttribute('visible') !== 'false')
+              .map(col => ({
+                field: col.getAttribute('field'),
+                header: col.getAttribute('header'),
+                align: col.getAttribute('align') || 'left',
+              }));
+  
+            const tableHeaders = columns.map(col => col.header);
+            const data = users.value.map(user =>
+              columns.map(col => {
+                if (col.field === 'averageRating') {
+                  return '★'.repeat(Math.round(user[col.field])) +
+                         '☆'.repeat(5 - Math.round(user[col.field]));
+                }
+                return user[col.field];
+              })
+            );
+  
+            const drawHeader = (doc, styles, headers) => {
+              doc.setFont(styles.font);
+              doc.setFontSize(styles.titleSize);
+              doc.text(title, 105, styles.margin.top - 10, { align: 'center' });
+  
+              let currentY = styles.margin.top;
+              headers.forEach(header => {
+                let headerText = header.text.replace('{date}', new Date().toLocaleDateString());
+                doc.setFontSize(header.fontSize);
+                doc.text(
+                  headerText,
+                  header.align === 'left' ? styles.margin.left : 105,
+                  currentY,
+                  { align: header.align }
+                );
+                currentY += header.fontSize + 2;
+              });
+            };
+  
+            const drawFooter = (doc, styles, footers, pageNum, pageCount) => {
+              let currentY = 297 - styles.margin.bottom;
+              footers.forEach(footer => {
+                let footerText = footer.text
+                  .replace('{page}', pageNum)
+                  .replace('{pages}', pageCount);
+                doc.setFontSize(footer.fontSize);
+                doc.text(
+                  footerText,
+                  footer.align === 'left' ? styles.margin.left : 105,
+                  currentY,
+                  { align: footer.align }
+                );
+                currentY -= footer.fontSize + 2;
+              });
+            };
+  
+            drawHeader(doc, styles, headers);
+  
+            autoTable(doc, {
+              head: [tableHeaders],
+              body: data,
+              startY: styles.margin.top + (headers.length * (styles.headerSize + 2)) + 5,
+              styles: { font: styles.font, fontSize: styles.cellSize },
+              margin: {
+                top: styles.margin.top + (headers.length * (styles.headerSize + 2)) + 5,
+                left: styles.margin.left,
+                right: styles.margin.right,
+                bottom: styles.margin.bottom,
+              },
+              columnStyles: columns.reduce((acc, col, idx) => {
+                acc[idx] = { halign: col.align };
+                return acc;
+              }, {}),
+              didDrawPage: (data) => {
+                const pageNum = doc.internal.getCurrentPageInfo().pageNumber;
+                const pageCount = doc.internal.getNumberOfPages();
+  
+                drawHeader(doc, styles, headers);
+                drawFooter(doc, styles, footers, pageNum, pageCount);
+              },
+            });
+  
+            doc.save('user-list.pdf');
+          })
+          .catch(error => {
+            console.error('Error generating PDF:', error);
+          });
+      };
+  
+      const onPage = (event) => {
+        rowsPerPage.value = event.rows;
+        fetchUsers(event.page + 1, event.rows);
+      };
+  
+      onMounted(async () => {
+        await loadTemplateConfig();
+        fetchUsers();
+      });
+  
+      return {
+        users,
+        loading,
+        totalRecords,
+        rowsPerPage,
+        dt,
+        fetchUsers,
+        onPage,
+        generatePDF
+      };
+    },
+  };
+  </script>
+  
+  <style scoped>
+  .card {
+    padding: 2rem;
+  }
+  </style>

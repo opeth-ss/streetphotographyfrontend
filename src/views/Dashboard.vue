@@ -6,7 +6,18 @@
     dropdown 
     :suggestions="filteredItems" 
     @complete="search" 
-    field="tagName" />
+    @focus="onFocus"
+    :virtualScrollerOptions="{
+      lazy: true, 
+      autoSize: false, 
+      itemSize: 40, 
+      delay: 100, 
+      appendOnly: true, 
+      loading: loading, 
+      onLazyLoad: onLazyLoad
+    }"
+  />
+  
   <Button label="Create Post" @click="openDialog" />
 
   <Dialog
@@ -45,9 +56,7 @@
         multiple
         :suggestions="filteredItems" 
         @complete="search" 
-        field="tagName"
-        :class="{ 'p-invalid': errors.tags }"
-      />
+        :class="{ 'p-invalid': errors.tags }" />
       <small v-if="errors.tags" class="p-error">{{ errors.tags }}</small>
     </div>
 
@@ -61,8 +70,7 @@
         chooseLabel="Browse"
         @select="onSelectFile"
         @upload="onUpload"
-        :class="{ 'p-invalid': errors.file }"
-      />
+        :class="{ 'p-invalid': errors.file }" />
       <small v-if="errors.file" class="p-error">{{ errors.file }}</small>
     </div>
 
@@ -73,8 +81,7 @@
         icon="pi pi-check" 
         @click="savePost" 
         :loading="loading" 
-        :disabled="!isFormValid"
-      />
+        :disabled="!isFormValid" />
     </template>
   </Dialog>
 </template>
@@ -95,7 +102,7 @@ export default {
     AutoComplete,
     Dialog,
     InputText,
-    FileUpload
+    FileUpload,
   },
   setup() {
     const authStore = useAuthStore();
@@ -105,6 +112,9 @@ export default {
     const items = ref([]);
     const displayDialog = ref(false);
     const loading = ref(false);
+    const offset = ref(0);
+    const limit = 10;
+    const hasMore = ref(true);
 
     // Form data
     const form = ref({
@@ -171,21 +181,26 @@ export default {
       return items.value.map(item => item.tagName);
     });
 
-    const logout = async () => {
-      await authStore.logout();
-      router.push('/login');
-    };
-
-    const search = async (event) => {
+    const loadTags = async (isInitial = false, firstIndex = 0) => {
+      if (!hasMore.value && !isInitial) return;
+      loading.value = true;
       try {
-        const response = await fetch('http://localhost:8080/streetphotography/api/user/tags', {
+        if (isInitial) {
+          offset.value = 0;
+          items.value = []; // Clear items for initial load
+        } else {
+          offset.value = firstIndex; // Use the first index from onLazyLoad
+        }
+        
+        const response = await fetch('http://localhost:8080/streetphotography/api/user/tags/paginated', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ 
-            query: event.query,
-            limit: event.query ? null : 10
+            query: value.value,
+            limit,
+            offset: offset.value
           })
         });
 
@@ -194,14 +209,54 @@ export default {
         }
 
         const data = await response.json();
-        items.value = data;
+        
+        if (isInitial) {
+          items.value = data;
+        } else {
+          // Only append new items if they aren't already in the list
+          const existingIds = new Set(items.value.map(item => item.id));
+          const newItems = data.filter(item => !existingIds.has(item.id));
+          items.value = [...items.value, ...newItems];
+        }
+        
+        offset.value += limit;
+        hasMore.value = data.length === limit;
       } catch (error) {
         console.error('Failed to fetch tags:', error);
+      } finally {
+        loading.value = false;
       }
     };
 
+    const search = async (event) => {
+      offset.value = 0;
+      value.value = event.query;
+      await loadTags(true);
+    };
+
+    const onFocus = async () => {
+      if (items.value.length === 0) {
+        offset.value = 0;
+        hasMore.value = true;
+        value.value = '';
+        await loadTags(true);
+      }
+    };
+
+    const onLazyLoad = async (event) => {
+      console.log('onLazyLoad called, first:', event.first, 'last:', event.last);
+      if (hasMore.value && !loading.value) {
+        // Load items starting from the first index requested by the scroller
+        await loadTags(false, event.first);
+      }
+    };
+
+    const logout = async () => {
+      await authStore.logout();
+      router.push('/login');
+    };
+
     const openDialog = () => {
-      // Reset form when opening dialog
       form.value = {
         description: '',
         location: '',
@@ -223,7 +278,6 @@ export default {
     };
 
     const onUpload = () => {
-      // Handle file upload logic here
       errors.value.file = form.value.file ? '' : 'Please select an image';
     };
 
@@ -231,11 +285,9 @@ export default {
       if (!isFormValid.value) return;
 
       loading.value = true;
-      // Simulate async save
       setTimeout(() => {
         loading.value = false;
         displayDialog.value = false;
-        // Reset form after save
         form.value = {
           description: '',
           location: '',
@@ -248,6 +300,7 @@ export default {
     return {
       value,
       filteredItems,
+      items,
       logout,
       search,
       displayDialog,
@@ -261,7 +314,9 @@ export default {
       isDescriptionValid,
       isLocationValid,
       isTagsValid,
-      isFormValid
+      isFormValid,
+      onFocus,
+      onLazyLoad
     };
   }
 };
@@ -306,5 +361,20 @@ h1 {
 .p-error {
   color: #ff4d4f;
   font-size: 0.875rem;
+}
+
+.scroller {
+  height: 300px;
+  border: 1px solid #dee2e6;
+  margin-bottom: 1.5rem;
+}
+
+.tag-item {
+  padding: 0.5rem;
+  border-bottom: 1px solid #dee2e6;
+}
+
+::v-deep(.p-autocomplete-panel) {
+  height: 200px !important;
 }
 </style>
