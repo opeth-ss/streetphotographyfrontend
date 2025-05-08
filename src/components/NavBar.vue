@@ -2,7 +2,6 @@
   <nav class="navbar">
     <img
       class="navbar-logo"
-      src="/home/opeth-ss/Downloads/LY/ly-logo-zip-file/png/logo-grayscale-inverted.png"
       alt="LY logo"
     />
     <div class="nav-links">

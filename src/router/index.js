@@ -6,6 +6,7 @@ const Login = () => import('../views/Login.vue');
 const Register = () => import('../views/Register.vue');
 const UserList = () => import('../views/UserList.vue');
 const UserList1 = () => import('../views/UserList1.vue');
+const UserList2 = () => import('../views/UserList2.vue');
 const Dashboard = () => import('../views/Dashboard.vue');
 const Calculator = () => import('../views/Calculator.vue');
 const Class = () => import('../views/TypeClass.vue');
@@ -26,6 +27,12 @@ const routes = [
         path: '/userlist',
         name: 'Userlist',
         component: UserList1,
+        meta: { requiresAuth: true, requiresAdmin: true },
+      },
+      {
+        path: '/userlist1',
+        name: 'Userlist2',
+        component: UserList2,
         meta: { requiresAuth: true, requiresAdmin: true },
       },
       {
