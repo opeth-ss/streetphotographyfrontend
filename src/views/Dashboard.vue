@@ -192,7 +192,7 @@ export default {
           offset.value = firstIndex; // Use the first index from onLazyLoad
         }
         
-        const response = await fetch('http://localhost:8080/streetphotography/api/user/tags/paginated', {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/user/tags/paginated`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

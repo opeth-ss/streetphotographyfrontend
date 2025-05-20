@@ -538,7 +538,7 @@ export default {
           global: filters.value.global.value || null,
         };
 
-        const response = await fetch('http://localhost:8080/streetphotography/api/admin/userlist', {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/userlist`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -594,7 +594,7 @@ export default {
     const updateUser = async () => {
       loading.value = true;
       try {
-        const response = await fetch('http://localhost:8080/streetphotography/api/admin/updateUser', {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/updateUser`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -634,7 +634,7 @@ export default {
       loading.value = true;
       try {
         const response = await fetch(
-          `http://localhost:8080/streetphotography/api/admin/deleteUser/${userId}`,
+          `${import.meta.env.VITE_API_BASE_URL}/admin/deleteUser/${userId}`,
           {
             method: 'DELETE',
             headers: {

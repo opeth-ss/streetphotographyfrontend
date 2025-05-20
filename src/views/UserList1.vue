@@ -79,7 +79,7 @@ export default {
     const fetchUsers = async (page = 1, rows = rowsPerPage.value) => {
       loading.value = true;
       try {
-        const response = await fetch('http://localhost:8080/streetphotography/api/admin/userlist', {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/userlist`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

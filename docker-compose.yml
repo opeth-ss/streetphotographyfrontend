@@ -1,0 +1,57 @@
+version: '3'
+
+services:
+  backend:
+    build:
+      context: /home/opeth-ss/streetphotography
+      dockerfile: Dockerfile
+    container_name: backend
+    networks:
+      - street_photography_network
+    environment:
+      - DB_HOST=street_photography_db
+      - DB_PORT=3306
+      - DB_NAME=photograph
+      - DB_USER=pallav
+      - DB_PASSWORD=Pallav23@
+    ports:
+      - "8080:8080"  # Map host port 8080 to container port 8080
+    depends_on:
+      - street_photography_db
+
+  front-end:
+    build:
+      context: /home/opeth-ss/vue/streetphotography
+      dockerfile: Dockerfile
+    container_name: frontend
+    networks:
+      - street_photography_network
+    environment:
+      - VUE_APP_API_URL=http://localhost:8080/streetphotography  # Use exposed port
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  street_photography_db:
+    image: mysql:8.0
+    container_name: photograph
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"  # Set root password
+      MYSQL_DATABASE: photograph
+      MYSQL_USER: pallav
+      MYSQL_PASSWORD: Pallav23@
+    networks:
+      - street_photography_network
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+
+networks:
+  street_photography_network:
+    driver: bridge
+
+volumes:
+  mysql_data:

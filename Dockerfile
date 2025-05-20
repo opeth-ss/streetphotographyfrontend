@@ -1,20 +1,12 @@
-# Use a lightweight Node.js base image
-FROM node:20-alpine
-
-# Set working directory
+FROM node:20-alpine AS build-stage
 WORKDIR /app
-
-# Copy package.json and package-lock.json
 COPY package*.json ./
-
-# Install dependencies
-RUN npm install
-
-# Copy the rest of the project
+RUN npm ci && npm cache clean --force
 COPY . .
+RUN npm run build
 
-# Expose the Vite default port
-EXPOSE 5173
-
-# Start the development server
-CMD ["npm", "run", "dev"]
+FROM nginx:alpine AS production-stage
+COPY --from=build-stage /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

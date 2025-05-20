@@ -14,7 +14,7 @@ const processQueue = (error) => {
 };
 
 const apiFetch = async (url, options = {}) => {
-  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/streetphotography/api';
+  const baseUrl = import.meta.env.VITE_API_URL || `${import.meta.env.VITE_API_BASE_URL}`;
   const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
 
   const defaultOptions = {
