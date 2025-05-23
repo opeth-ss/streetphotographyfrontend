@@ -1,9 +1,11 @@
 <template>
   <h1>User Page</h1>
   <Button label="Logout" icon="pi pi-sign-out" @click="logout" class="p-button-rounded p-button-text" />
+
   <AutoComplete 
-    v-model="value" 
+    v-model="selectedTags" 
     dropdown 
+    multiple
     :suggestions="filteredItems" 
     @complete="search" 
     @focus="onFocus"
@@ -17,7 +19,7 @@
       onLazyLoad: onLazyLoad
     }"
   />
-  
+
   <Button label="Create Post" @click="openDialog" />
 
   <Dialog
@@ -109,6 +111,7 @@ export default {
     const router = useRouter();
 
     const value = ref('');
+    const selectedTags = ref([]);
     const items = ref([]);
     const displayDialog = ref(false);
     const loading = ref(false);
@@ -116,7 +119,6 @@ export default {
     const limit = 10;
     const hasMore = ref(true);
 
-    // Form data
     const form = ref({
       description: '',
       location: '',
@@ -124,7 +126,6 @@ export default {
       file: null
     });
 
-    // Error messages
     const errors = ref({
       description: '',
       location: '',
@@ -132,53 +133,34 @@ export default {
       file: ''
     });
 
-    // Validation states
-    const isDescriptionValid = computed(() => {
-      return form.value.description.length >= 10;
-    });
+    const isDescriptionValid = computed(() => form.value.description.length >= 10);
+    const isLocationValid = computed(() => isDescriptionValid.value && form.value.location.length >= 3);
+    const isTagsValid = computed(() => isLocationValid.value && form.value.tags.length > 0);
+    const isFormValid = computed(() =>
+      isDescriptionValid.value &&
+      isLocationValid.value &&
+      isTagsValid.value &&
+      form.value.file !== null
+    );
 
-    const isLocationValid = computed(() => {
-      return isDescriptionValid.value && form.value.location.length >= 3;
-    });
-
-    const isTagsValid = computed(() => {
-      return isLocationValid.value && form.value.tags.length > 0;
-    });
-
-    const isFormValid = computed(() => {
-      return isDescriptionValid.value && 
-             isLocationValid.value && 
-             isTagsValid.value && 
-             form.value.file !== null;
-    });
-
-    // Watch form fields for real-time validation
     watch(() => form.value.description, (newValue) => {
-      if (newValue.length < 10) {
-        errors.value.description = 'Description must be at least 10 characters long';
-      } else {
-        errors.value.description = '';
-      }
+      errors.value.description = newValue.length < 10 ? 'Description must be at least 10 characters long' : '';
     });
 
     watch(() => form.value.location, (newValue) => {
-      if (newValue.length < 3) {
-        errors.value.location = 'Location must be at least 3 characters long';
-      } else {
-        errors.value.location = '';
-      }
+      errors.value.location = newValue.length < 3 ? 'Location must be at least 3 characters long' : '';
     });
 
     watch(() => form.value.tags, (newValue) => {
-      if (newValue.length === 0) {
-        errors.value.tags = 'At least one tag is required';
-      } else {
-        errors.value.tags = '';
-      }
+      errors.value.tags = newValue.length === 0 ? 'At least one tag is required' : '';
     });
 
     const filteredItems = computed(() => {
-      return items.value.map(item => item.tagName);
+      const tagNames = items.value.map(item => item.tagName);
+      const selectedSet = new Set(selectedTags.value || []);
+      const selected = tagNames.filter(tag => selectedSet.has(tag));
+      const remaining = tagNames.filter(tag => !selectedSet.has(tag));
+      return [...selected, ...remaining];
     });
 
     const loadTags = async (isInitial = false, firstIndex = 0) => {
@@ -187,38 +169,35 @@ export default {
       try {
         if (isInitial) {
           offset.value = 0;
-          items.value = []; // Clear items for initial load
+          items.value = [];
         } else {
-          offset.value = firstIndex; // Use the first index from onLazyLoad
+          offset.value = firstIndex;
         }
-        
+
         const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/user/tags/paginated`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             query: value.value,
             limit,
             offset: offset.value
           })
         });
 
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
+        if (!response.ok) throw new Error('Network response was not ok');
 
         const data = await response.json();
-        
+
         if (isInitial) {
           items.value = data;
         } else {
-          // Only append new items if they aren't already in the list
           const existingIds = new Set(items.value.map(item => item.id));
           const newItems = data.filter(item => !existingIds.has(item.id));
           items.value = [...items.value, ...newItems];
         }
-        
+
         offset.value += limit;
         hasMore.value = data.length === limit;
       } catch (error) {
@@ -244,9 +223,7 @@ export default {
     };
 
     const onLazyLoad = async (event) => {
-      console.log('onLazyLoad called, first:', event.first, 'last:', event.last);
       if (hasMore.value && !loading.value) {
-        // Load items starting from the first index requested by the scroller
         await loadTags(false, event.first);
       }
     };
@@ -283,7 +260,6 @@ export default {
 
     const savePost = () => {
       if (!isFormValid.value) return;
-
       loading.value = true;
       setTimeout(() => {
         loading.value = false;
@@ -299,6 +275,7 @@ export default {
 
     return {
       value,
+      selectedTags,
       filteredItems,
       items,
       logout,
@@ -326,54 +303,43 @@ export default {
 .card {
   padding: 2rem;
 }
-
 h1 {
   margin-bottom: 1.5rem;
 }
-
 .p-field {
   margin-bottom: 1.5rem;
 }
-
 .p-mr-2 {
   margin-right: 0.5rem;
 }
-
 .button-group {
   display: flex;
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
-
 .search-bar {
   margin-bottom: 1.5rem;
 }
-
 .search-bar input {
   width: 100%;
   max-width: 400px;
 }
-
 .p-column-filter {
   width: 100%;
 }
-
 .p-error {
   color: #ff4d4f;
   font-size: 0.875rem;
 }
-
 .scroller {
   height: 300px;
   border: 1px solid #dee2e6;
   margin-bottom: 1.5rem;
 }
-
 .tag-item {
   padding: 0.5rem;
   border-bottom: 1px solid #dee2e6;
 }
-
 ::v-deep(.p-autocomplete-panel) {
   height: 200px !important;
 }
