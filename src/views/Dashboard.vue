@@ -9,6 +9,7 @@
     :suggestions="filteredItems" 
     @complete="search" 
     @focus="onFocus"
+    optionLabel="displayLabel"
     :virtualScrollerOptions="{
       lazy: true, 
       autoSize: false, 
@@ -56,8 +57,9 @@
         v-model="form.tags" 
         dropdown 
         multiple
-        :suggestions="filteredItems" 
-        @complete="search" 
+        :suggestions="dialogFilteredItems" 
+        @complete="searchDialog" 
+        optionLabel="displayLabel"
         :class="{ 'p-invalid': errors.tags }" />
       <small v-if="errors.tags" class="p-error">{{ errors.tags }}</small>
     </div>
@@ -143,6 +145,25 @@ export default {
       form.value.file !== null
     );
 
+    // Function to add display label to items
+    const processItems = (rawItems) => {
+      return rawItems.map(item => ({
+        ...item,
+        displayLabel: `${item.id}. ${item.tagName}`
+      }));
+    };
+
+    // Function to filter items based on search query
+    const filterItemsByQuery = (itemsList, query) => {
+      if (!query) return itemsList;
+      
+      const searchTerm = query.toLowerCase();
+      return itemsList.filter(item => {
+        return item.tagName.toLowerCase().includes(searchTerm) || 
+               item.id.toString().includes(searchTerm);
+      });
+    };
+
     watch(() => form.value.description, (newValue) => {
       errors.value.description = newValue.length < 10 ? 'Description must be at least 10 characters long' : '';
     });
@@ -155,15 +176,41 @@ export default {
       errors.value.tags = newValue.length === 0 ? 'At least one tag is required' : '';
     });
 
+    // Enhanced filteredItems with search functionality
     const filteredItems = computed(() => {
-      const tagNames = items.value.map(item => item.tagName);
-      const selectedSet = new Set(selectedTags.value || []);
-      const selected = tagNames.filter(tag => selectedSet.has(tag));
-      const remaining = tagNames.filter(tag => !selectedSet.has(tag));
+      if (!items.value.length) return [];
+      
+      const processedItems = processItems(items.value);
+      const searchFiltered = filterItemsByQuery(processedItems, value.value);
+      
+      const selectedIds = new Set((selectedTags.value || []).map(tag => 
+        typeof tag === 'object' ? tag.id : tag
+      ));
+      
+      const selected = searchFiltered.filter(item => selectedIds.has(item.id));
+      const remaining = searchFiltered.filter(item => !selectedIds.has(item.id));
+      
       return [...selected, ...remaining];
     });
 
-    const loadTags = async (isInitial = false, firstIndex = 0) => {
+    // Enhanced dialog filtered items with search functionality
+    const dialogFilteredItems = computed(() => {
+      if (!items.value.length) return [];
+      
+      const processedItems = processItems(items.value);
+      const searchFiltered = filterItemsByQuery(processedItems, value.value);
+      
+      const selectedIds = new Set((form.value.tags || []).map(tag => 
+        typeof tag === 'object' ? tag.id : tag
+      ));
+      
+      const selected = searchFiltered.filter(item => selectedIds.has(item.id));
+      const remaining = searchFiltered.filter(item => !selectedIds.has(item.id));
+      
+      return [...selected, ...remaining];
+    });
+
+    const loadTags = async (isInitial = false, firstIndex = 0, searchQuery = '') => {
       if (!hasMore.value && !isInitial) return;
       loading.value = true;
       try {
@@ -180,7 +227,7 @@ export default {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            query: value.value,
+            query: searchQuery,
             limit,
             offset: offset.value
           })
@@ -210,7 +257,13 @@ export default {
     const search = async (event) => {
       offset.value = 0;
       value.value = event.query;
-      await loadTags(true);
+      await loadTags(true, 0, event.query);
+    };
+
+    const searchDialog = async (event) => {
+      offset.value = 0;
+      value.value = event.query;
+      await loadTags(true, 0, event.query);
     };
 
     const onFocus = async () => {
@@ -224,7 +277,7 @@ export default {
 
     const onLazyLoad = async (event) => {
       if (hasMore.value && !loading.value) {
-        await loadTags(false, event.first);
+        await loadTags(false, event.first, value.value);
       }
     };
 
@@ -277,9 +330,11 @@ export default {
       value,
       selectedTags,
       filteredItems,
+      dialogFilteredItems,
       items,
       logout,
       search,
+      searchDialog,
       displayDialog,
       loading,
       openDialog,
