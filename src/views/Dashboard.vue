@@ -176,7 +176,6 @@ export default {
       errors.value.tags = newValue.length === 0 ? 'At least one tag is required' : '';
     });
 
-    // Enhanced filteredItems with search functionality
     const filteredItems = computed(() => {
       if (!items.value.length) return [];
       
@@ -190,6 +189,7 @@ export default {
       const selected = searchFiltered.filter(item => selectedIds.has(item.id));
       const remaining = searchFiltered.filter(item => !selectedIds.has(item.id));
       
+    
       return [...selected, ...remaining];
     });
 
